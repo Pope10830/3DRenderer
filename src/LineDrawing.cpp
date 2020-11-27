@@ -149,8 +149,7 @@ void drawFilledTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour c
 
 }
 
-void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, std::string filename, float (&depth)[WIDTH + 1][HEIGHT + 1]) {
-	TextureMap textureMap = TextureMap(filename);
+void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, TextureMap textureMap, float (&depth)[WIDTH + 1][HEIGHT + 1]) {
 	CanvasPoint vertices [3];
 	sortVertices(vertices, triangle.v0(), triangle.v1(), triangle.v2());
 

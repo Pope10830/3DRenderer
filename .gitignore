@@ -1,8 +1,8 @@
 /build
+/cornell-box
+/logo
+/output
 CMakeLists.txt
-cornell-box.mtl
-cornell-box.obj
 Makefile
-output.ppm
 sphere.obj
 texture.ppm

@@ -17,7 +17,7 @@
 
 using namespace std;
 
-void readMTL(vector<Material> &materials, string filename) {
+void readMTL(vector<Material> &materials, string filename, string foldername) {
 	string line;
 	ifstream file;
 	file.open(filename);
@@ -35,7 +35,7 @@ void readMTL(vector<Material> &materials, string filename) {
 
 			materials.push_back(Material(name, Colour(name, r, g, b)));
 		} else if (splitline[0] == "map_Kd") {
-			materials.back().texture = TextureMap("./" + splitline[1]);
+			materials.back().texture = TextureMap(foldername + splitline[1]);
 			materials.back().hasTexture = true;
 		}
 	}
@@ -76,6 +76,7 @@ void readOBJ(vector<ModelTriangle> &triangles, string filename, float scale, vec
 				TexturePoint pointB = TexturePoint(texturePoints[stoi(b[1]) - 1][0] * currentMaterial.texture.width, texturePoints[stoi(b[1]) - 1][1] * currentMaterial.texture.height);
 				TexturePoint pointC = TexturePoint(texturePoints[stoi(c[1]) - 1][0] * currentMaterial.texture.width, texturePoints[stoi(c[1]) - 1][1] * currentMaterial.texture.height);
 				triangle.texturePoints = {{pointA, pointB, pointC}};
+				triangle.textureMap = currentMaterial.texture;
 			}
 
 			if (a.size() == 3) {
@@ -215,7 +216,7 @@ void renderTexturedTriangles(DrawingWindow &window, vector<ModelTriangle> triang
 
 		CanvasTriangle triangle = CanvasTriangle(points[0], points[1], points[2]);
 		if (triangle.v0().texturePoint.x != 0) {
-			drawTexturedTriangle(window, triangle, "texture.ppm", depth);
+			drawTexturedTriangle(window, triangle, triangles[i].textureMap, depth);
 		} else {
 			drawFilledTriangle(window, triangle, triangles[i].colour, depth);
 		}
@@ -264,6 +265,7 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 camera, glm::vec3 direc
 					closestIntersection.distanceFromCamera = -possibleSolution[0];
 					closestIntersection.intersectedTriangle = triangles[i];
 					closestIntersection.triangleIndex = i;
+					closestIntersection.solution = possibleSolution;
 
 					closestIntersection.intersectionPoint = calculateWorldPos(possibleSolution, triangles[i]);
 				}
@@ -446,11 +448,32 @@ glm::vec3 calculateDirection(float u, float v, glm::vec3 camera, glm::mat3 camer
 	return direction;
 }
 
+uint32_t getTexturePixelColour(ModelTriangle triangle, glm::vec3 solution) {
+	float u = solution[1];
+	float v = solution[2];
+
+	glm::vec3 leftVec = triangle.vertices[1] - triangle.vertices[0];
+	glm::vec3 rightVec = triangle.vertices[2] - triangle.vertices[0];
+
+	glm::vec3 uVec = leftVec * u;
+	glm::vec3 vVec = rightVec * v;
+
+	glm::vec3 pointVec = uVec + vVec;
+
+	float pointTextureX = triangle.texturePoints[0].x + ((triangle.texturePoints[1].x - triangle.texturePoints[0].x) * u) + ((triangle.texturePoints[2].x - triangle.texturePoints[0].x) * v);
+	float pointTextureY = triangle.texturePoints[0].y + ((triangle.texturePoints[1].y - triangle.texturePoints[0].y) * u) + ((triangle.texturePoints[2].y - triangle.texturePoints[0].y) * v);
+
+	uint32_t colourInt = triangle.textureMap.pixels[(round(pointTextureY) * triangle.textureMap.width) + round(pointTextureX)];
+
+	return colourInt;
+}
+
 void drawRayTrace(DrawingWindow &window, vector<ModelTriangle> triangles, glm::vec3 camera, glm::mat3 cameraOrientation, glm::vec3 light) {
 	window.clearPixels();
 
 	for (float v = 0; v < HEIGHT; v++) {
 		for (float u = 0; u < WIDTH; u++) {
+			std::cout << "X: " << u << ", Y: " << v << "/" << HEIGHT << std::endl;
 			glm::vec3 direction = calculateDirection(u, v, camera, cameraOrientation);
 
 			RayTriangleIntersection inter = getClosestIntersection(camera, direction, triangles, -1);
@@ -458,8 +481,15 @@ void drawRayTrace(DrawingWindow &window, vector<ModelTriangle> triangles, glm::v
 				window.setPixelColour(round(u), round(v), 0);
 			} else {
 				float brightness = getBrightness(inter.intersectionPoint, light, triangles, camera, inter.triangleIndex);
-				Colour colour = inter.intersectedTriangle.colour;
-				uint32_t colourInt = (255 << 24) + (int(colour.red * brightness) << 16) + (int(colour.green * brightness) << 8) + int(colour.blue * brightness);
+				uint32_t colourInt;
+
+				if (inter.intersectedTriangle.texturePoints.size() != 0) {
+					colourInt = getTexturePixelColour(inter.intersectedTriangle, inter.solution);
+				} else {
+					Colour colour = inter.intersectedTriangle.colour;
+					colourInt = (255 << 24) + (int(colour.red * brightness) << 16) + (int(colour.green * brightness) << 8) + int(colour.blue * brightness);
+				}
+
 				window.setPixelColour(round(u), round(v), colourInt);
 			}
 		}
@@ -471,16 +501,20 @@ void draw(DrawingWindow &window, vector<ModelTriangle> triangles, glm::vec3 came
 
 	if (renderMode == 0) { // Raytrace
 		drawRayTrace(window, triangles, camera, cameraOrientation, light);
+		std::cout << "Rendered Ray" << std::endl;
 	} else if (renderMode == 1) { // Raster
 		renderTexturedTriangles(window, triangles, camera, cameraOrientation);
+		std::cout << "Rendered Rast" << std::endl;
 	} else if (renderMode == 2) { // Wireframe
 		renderWireframes(window, triangles, camera, cameraOrientation);
+		std::cout << "Rendered Wire" << std::endl;
 	}
+
 }
 
 void update(DrawingWindow &window, glm::vec3 &camera, glm::mat3 &cameraOrientation) {
-	//rotateY(camera);
-	//lookAt(glm::vec3(0.0, 0.0, 0.0), camera, cameraOrientation);
+	rotateY(camera);
+	lookAt(glm::vec3(50.0, 45.0, 0.0), camera, cameraOrientation);
 }
 
 void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camera, glm::mat3 &cameraOrientation, int &renderMode, glm::vec3 &light) {
@@ -495,34 +529,41 @@ void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camera, glm:
 		else if (event.key.keysym.sym == SDLK_o) rotateY(camera);
 		else if (event.key.keysym.sym == SDLK_l) tilt(cameraOrientation);
 		else if (event.key.keysym.sym == SDLK_k) pan(cameraOrientation);
-		else if (event.key.keysym.sym == SDLK_i) lookAt(glm::vec3(0.0, 0.0, 0.0), camera, cameraOrientation);
+		else if (event.key.keysym.sym == SDLK_i) lookAt(glm::vec3(50.0, 45.0, 0.0), camera, cameraOrientation);
 		else if (event.key.keysym.sym == SDLK_r) renderMode = 0; // Raytrace
 		else if (event.key.keysym.sym == SDLK_t) renderMode = 1; // Raster
 		else if (event.key.keysym.sym == SDLK_y) renderMode = 2; // Wireframe
-		else if (event.key.keysym.sym == SDLK_a) light[0] -= 0.1;
-		else if (event.key.keysym.sym == SDLK_d) light[0] += 0.1;
-		else if (event.key.keysym.sym == SDLK_w) light[1] += 0.1;
-		else if (event.key.keysym.sym == SDLK_s) light[1] -= 0.1;
-		else if (event.key.keysym.sym == SDLK_q) light[2] -= 0.1;
-		else if (event.key.keysym.sym == SDLK_e) light[2] += 0.1;
+		else if (event.key.keysym.sym == SDLK_a) light[0] -= 1;
+		else if (event.key.keysym.sym == SDLK_d) light[0] += 1;
+		else if (event.key.keysym.sym == SDLK_w) light[1] += 1;
+		else if (event.key.keysym.sym == SDLK_s) light[1] -= 1;
+		else if (event.key.keysym.sym == SDLK_q) light[2] -= 1;
+		else if (event.key.keysym.sym == SDLK_e) light[2] += 1;
+		std::cout << renderMode << std::endl;
 	}
 	else if (event.type == SDL_MOUSEBUTTONDOWN) window.savePPM("output.ppm");
+
+}
+
+void outputFrame(int frame, DrawingWindow window) {
+	string filename = "./output/frame" + to_string(frame) + ".ppm";
+	window.savePPM(filename);
 }
 
 int main(int argc, char *argv[]) {
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
 
+	string foldername = "./logo/";
+
 	vector<Material> materials;
-	readMTL(materials, "./cornell-box.mtl");
+	readMTL(materials, foldername + "materials.mtl", foldername);
 
 	vector<ModelTriangle> triangles;
-	//readOBJ(triangles, "./cornell-box.obj", 0.17, materials);
-	readOBJ(triangles, "./sphere.obj", 0.17, materials);
+	readOBJ(triangles, foldername + "logo.obj", 0.17, materials);
 
-	//glm::vec3 light(0.0, 0.4655, 0.0);
-	glm::vec3 light(0.0, 0.4, 0.0);
-	glm::vec3 camera(0.0, 0.0, 4.0);
+	glm::vec3 light(400.0, 400.0, 40.0);
+	glm::vec3 camera(50.0, 45.0, 150.0);
 	glm::mat3 cameraOrientation(
 		1.0, 0.0, 0.0,
 		0.0, 1.0, 0.0,
@@ -531,6 +572,8 @@ int main(int argc, char *argv[]) {
 
 	int renderMode = 0;
 
+	int frame = 0;
+
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window, camera, cameraOrientation, renderMode, light);
@@ -538,5 +581,7 @@ int main(int argc, char *argv[]) {
 		draw(window, triangles, camera, cameraOrientation, light, renderMode);
 		// Need to render the frame at the end, or nothing actually gets shown on the screen !
 		window.renderFrame();
+		outputFrame(frame, window);
+		frame++;
 	}
 }
