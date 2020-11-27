@@ -43,7 +43,7 @@ void readMTL(vector<Material> &materials, string filename, string foldername) {
 	file.close();
 }
 
-void readOBJ(vector<ModelTriangle> &triangles, string filename, float scale, vector<Material> materials) {
+void readOBJ(vector<ModelTriangle> &triangles, string filename, float scale, vector<Material> &materials) {
 	vector<glm::vec3> points;
 	vector<glm::vec2> texturePoints;
 	vector<glm::vec3> normals;
@@ -106,7 +106,7 @@ void readOBJ(vector<ModelTriangle> &triangles, string filename, float scale, vec
 	file.close();
 }
 
-void projectVertices(DrawingWindow &window, vector<ModelTriangle> triangles) {
+void projectVertices(DrawingWindow &window, vector<ModelTriangle> &triangles) {
 	glm::vec3 camera(0.0, 0.0, 4.0);
 	float focalLength = 2.0;
 
@@ -126,7 +126,7 @@ void projectVertices(DrawingWindow &window, vector<ModelTriangle> triangles) {
 	}
 }
 
-void renderWireframes(DrawingWindow &window, vector<ModelTriangle> triangles, glm::vec3 camera, glm::mat3 cameraOrientation) {
+void renderWireframes(DrawingWindow &window, vector<ModelTriangle> &triangles, glm::vec3 &camera, glm::mat3 &cameraOrientation) {
 	float focalLength = 2.0;
 	float scale = 200.0;
 
@@ -154,7 +154,7 @@ void renderWireframes(DrawingWindow &window, vector<ModelTriangle> triangles, gl
 	}
 }
 
-void renderFilledTriangles(DrawingWindow &window, vector<ModelTriangle> triangles) {
+void renderFilledTriangles(DrawingWindow &window, vector<ModelTriangle> &triangles) {
 	glm::vec3 camera(0.0, 0.0, 4.0);
 	float focalLength = 2.0;
 
@@ -180,7 +180,7 @@ void renderFilledTriangles(DrawingWindow &window, vector<ModelTriangle> triangle
 	}
 }
 
-void renderTexturedTriangles(DrawingWindow &window, vector<ModelTriangle> triangles, glm::vec3 camera, glm::mat3 cameraOrientation) {
+void renderTexturedTriangles(DrawingWindow &window, vector<ModelTriangle> &triangles, glm::vec3 &camera, glm::mat3 &cameraOrientation) {
 	float focalLength = 2.0;
 	float scale = 200.0;
 
@@ -223,7 +223,7 @@ void renderTexturedTriangles(DrawingWindow &window, vector<ModelTriangle> triang
 	}
 }
 
-bool pointIsInTriangle(ModelTriangle triangle, float u, float v) {
+bool pointIsInTriangle(ModelTriangle &triangle, float u, float v) {
 	if (u >= 0.0 && u <= 1.0) {
 		if (v >= 0.0 && v <= 1.0) {
 			if (u + v <= 1.0) {
@@ -235,7 +235,7 @@ bool pointIsInTriangle(ModelTriangle triangle, float u, float v) {
 	return false;
 }
 
-glm::vec3 calculateWorldPos(glm::vec3 solution, ModelTriangle triangle) {
+glm::vec3 calculateWorldPos(glm::vec3 &solution, ModelTriangle &triangle) {
 	glm::vec3 leftVec = triangle.vertices[1] - triangle.vertices[0];
 	glm::vec3 rightVec = triangle.vertices[2] - triangle.vertices[0];
 
@@ -247,7 +247,7 @@ glm::vec3 calculateWorldPos(glm::vec3 solution, ModelTriangle triangle) {
 	return point;
 }
 
-RayTriangleIntersection getClosestIntersection(glm::vec3 camera, glm::vec3 direction, vector<ModelTriangle> triangles, int triangleIndex) {
+RayTriangleIntersection getClosestIntersection(glm::vec3 &camera, glm::vec3 &direction, vector<ModelTriangle> &triangles, int triangleIndex) {
 	RayTriangleIntersection closestIntersection;
 
 	closestIntersection.distanceFromCamera = -1;
@@ -280,7 +280,7 @@ float round3DP(float number) {
 	return round(number * 1000.0) / 1000.0;
 }
 
-void lookAt(glm::vec3 point, glm::vec3 camera, glm::mat3 &cameraOrientation) {
+void lookAt(glm::vec3 &point, glm::vec3 &camera, glm::mat3 &cameraOrientation) {
 	glm::vec3 forward = glm::normalize(camera - point);
 	glm::vec3 right = glm::normalize(glm::cross(glm::vec3(0.0, 1.0, 0.0), forward));
 
@@ -339,7 +339,7 @@ void pan(glm::mat3 &cameraOrientation) {
 	cameraOrientation = cameraOrientation * m;
 }
 
-float proximityLighting(glm::vec3 point, glm::vec3 light) {
+float proximityLighting(glm::vec3 &point, glm::vec3 &light) {
 	float distanceFromLight = glm::length(light - point);
 
 	float brightness = 1.0 / (4 * M_PI * (distanceFromLight * distanceFromLight));
@@ -349,7 +349,7 @@ float proximityLighting(glm::vec3 point, glm::vec3 light) {
 	return brightness;
 }
 
-float angleOfIncidenceLighting(glm::vec3 point, glm::vec3 light, ModelTriangle triangle) {
+float angleOfIncidenceLighting(glm::vec3 &point, glm::vec3 &light, ModelTriangle &triangle) {
 	glm::vec3 vectorToLight = light - point;
 
 	float angleOfIncidence = glm::dot(triangle.normal, vectorToLight);
@@ -365,7 +365,7 @@ float angleOfIncidenceLighting(glm::vec3 point, glm::vec3 light, ModelTriangle t
 	return pow(angleOfIncidence, 0.4);
 }
 
-float specularLighting(glm::vec3 point, glm::vec3 light, ModelTriangle triangle, glm::vec3 camera) {
+float specularLighting(glm::vec3 &point, glm::vec3 &light, ModelTriangle &triangle, glm::vec3 &camera) {
 	glm::vec3 incidenceVector = point - light;
 
 	glm::vec3 normal = triangle.normal;
@@ -386,7 +386,7 @@ float specularLighting(glm::vec3 point, glm::vec3 light, ModelTriangle triangle,
 	return directionDifference;
 }
 
-bool inShadow(glm::vec3 point, glm::vec3 light, vector<ModelTriangle> triangles, int triangleIndex) {
+bool inShadow(glm::vec3 &point, glm::vec3 &light, vector<ModelTriangle> &triangles, int triangleIndex) {
 	glm::vec3 direction;
 	direction[0] = -(light[0] - point[0]);
 	direction[1] = -(light[1] - point[1]);
@@ -416,7 +416,7 @@ float ambientLighting(float brightness) {
 	}
 }
 
-float getBrightness(glm::vec3 point, glm::vec3 light, vector<ModelTriangle> triangles, glm::vec3 camera, int triangleIndex) {
+float getBrightness(glm::vec3 &point, glm::vec3 &light, vector<ModelTriangle> &triangles, glm::vec3 &camera, int triangleIndex) {
 	float brightness = 0.0;
 
 	if (!inShadow(point, light, triangles, triangleIndex)) {
@@ -433,7 +433,7 @@ float getBrightness(glm::vec3 point, glm::vec3 light, vector<ModelTriangle> tria
 	return brightness;
 }
 
-glm::vec3 calculateDirection(float u, float v, glm::vec3 camera, glm::mat3 cameraOrientation) {
+glm::vec3 calculateDirection(float u, float v, glm::vec3 &camera, glm::mat3 &cameraOrientation) {
 	float focalLength = 2.0;
 	float scale = 200;
 	float x = (u - (WIDTH / 2.0)) / -scale;
@@ -448,17 +448,9 @@ glm::vec3 calculateDirection(float u, float v, glm::vec3 camera, glm::mat3 camer
 	return direction;
 }
 
-uint32_t getTexturePixelColour(ModelTriangle triangle, glm::vec3 solution) {
+uint32_t getTexturePixelColour(ModelTriangle &triangle, glm::vec3 &solution) {
 	float u = solution[1];
 	float v = solution[2];
-
-	glm::vec3 leftVec = triangle.vertices[1] - triangle.vertices[0];
-	glm::vec3 rightVec = triangle.vertices[2] - triangle.vertices[0];
-
-	glm::vec3 uVec = leftVec * u;
-	glm::vec3 vVec = rightVec * v;
-
-	glm::vec3 pointVec = uVec + vVec;
 
 	float pointTextureX = triangle.texturePoints[0].x + ((triangle.texturePoints[1].x - triangle.texturePoints[0].x) * u) + ((triangle.texturePoints[2].x - triangle.texturePoints[0].x) * v);
 	float pointTextureY = triangle.texturePoints[0].y + ((triangle.texturePoints[1].y - triangle.texturePoints[0].y) * u) + ((triangle.texturePoints[2].y - triangle.texturePoints[0].y) * v);
@@ -468,7 +460,7 @@ uint32_t getTexturePixelColour(ModelTriangle triangle, glm::vec3 solution) {
 	return colourInt;
 }
 
-void drawRayTrace(DrawingWindow &window, vector<ModelTriangle> triangles, glm::vec3 camera, glm::mat3 cameraOrientation, glm::vec3 light) {
+void drawRayTrace(DrawingWindow &window, vector<ModelTriangle> &triangles, glm::vec3 &camera, glm::mat3 &cameraOrientation, glm::vec3 &light) {
 	window.clearPixels();
 
 	for (float v = 0; v < HEIGHT; v++) {
@@ -496,7 +488,7 @@ void drawRayTrace(DrawingWindow &window, vector<ModelTriangle> triangles, glm::v
 	}
 }
 
-void draw(DrawingWindow &window, vector<ModelTriangle> triangles, glm::vec3 camera, glm::mat3 cameraOrientation, glm::vec3 light, int renderMode) {
+void draw(DrawingWindow &window, vector<ModelTriangle> &triangles, glm::vec3 &camera, glm::mat3 &cameraOrientation, glm::vec3 &light, int renderMode) {
 	window.clearPixels();
 
 	if (renderMode == 0) { // Raytrace
@@ -514,10 +506,12 @@ void draw(DrawingWindow &window, vector<ModelTriangle> triangles, glm::vec3 came
 
 void update(DrawingWindow &window, glm::vec3 &camera, glm::mat3 &cameraOrientation) {
 	rotateY(camera);
-	lookAt(glm::vec3(50.0, 45.0, 0.0), camera, cameraOrientation);
+	glm::vec3 centre(50.0, 45.0, 0.0);
+	lookAt(centre, camera, cameraOrientation);
 }
 
 void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camera, glm::mat3 &cameraOrientation, int &renderMode, glm::vec3 &light) {
+	glm::vec3 centre(50.0, 45.0, 0.0);
 	if (event.type == SDL_KEYDOWN) {
 		if (event.key.keysym.sym == SDLK_LEFT) camera[0] += 0.3;
 		else if (event.key.keysym.sym == SDLK_RIGHT) camera[0] -= 0.3;
@@ -529,7 +523,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camera, glm:
 		else if (event.key.keysym.sym == SDLK_o) rotateY(camera);
 		else if (event.key.keysym.sym == SDLK_l) tilt(cameraOrientation);
 		else if (event.key.keysym.sym == SDLK_k) pan(cameraOrientation);
-		else if (event.key.keysym.sym == SDLK_i) lookAt(glm::vec3(50.0, 45.0, 0.0), camera, cameraOrientation);
+		else if (event.key.keysym.sym == SDLK_i) lookAt(centre, camera, cameraOrientation);
 		else if (event.key.keysym.sym == SDLK_r) renderMode = 0; // Raytrace
 		else if (event.key.keysym.sym == SDLK_t) renderMode = 1; // Raster
 		else if (event.key.keysym.sym == SDLK_y) renderMode = 2; // Wireframe
@@ -582,6 +576,9 @@ int main(int argc, char *argv[]) {
 		// Need to render the frame at the end, or nothing actually gets shown on the screen !
 		window.renderFrame();
 		outputFrame(frame, window);
+		//if (frame == 180) {
+			//break;
+		//}
 		frame++;
 	}
 }

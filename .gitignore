@@ -2,7 +2,7 @@
 /cornell-box
 /logo
 /output
+/RenderedFrames
 CMakeLists.txt
 Makefile
 sphere.obj
-texture.ppm
