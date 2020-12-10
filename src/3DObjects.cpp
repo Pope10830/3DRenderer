@@ -68,15 +68,17 @@ void readOBJ(vector<ModelTriangle> &triangles, string filename, float scale, vec
 			vector<string> a = split(splitline[1], '/');
 			vector<string> b = split(splitline[2], '/');
 			vector<string> c = split(splitline[3], '/');
-
 			ModelTriangle triangle = ModelTriangle(points[stoi(a[0]) - 1], points[stoi(b[0]) - 1], points[stoi(c[0]) - 1], currentMaterial.colour);
 
-			if (currentMaterial.hasTexture) {
+			if (currentMaterial.hasTexture && a[1] != "") {
 				TexturePoint pointA = TexturePoint(texturePoints[stoi(a[1]) - 1][0] * currentMaterial.texture.width, texturePoints[stoi(a[1]) - 1][1] * currentMaterial.texture.height);
 				TexturePoint pointB = TexturePoint(texturePoints[stoi(b[1]) - 1][0] * currentMaterial.texture.width, texturePoints[stoi(b[1]) - 1][1] * currentMaterial.texture.height);
 				TexturePoint pointC = TexturePoint(texturePoints[stoi(c[1]) - 1][0] * currentMaterial.texture.width, texturePoints[stoi(c[1]) - 1][1] * currentMaterial.texture.height);
 				triangle.texturePoints = {{pointA, pointB, pointC}};
 				triangle.textureMap = currentMaterial.texture;
+				triangle.hasTexture = true;
+			} else {
+				triangle.hasTexture = false;
 			}
 
 			if (a.size() == 3) {
@@ -154,25 +156,35 @@ void renderWireframes(DrawingWindow &window, vector<ModelTriangle> &triangles, g
 	}
 }
 
-void renderFilledTriangles(DrawingWindow &window, vector<ModelTriangle> &triangles) {
-	glm::vec3 camera(0.0, 0.0, 4.0);
+void renderFilledTriangles(DrawingWindow &window, vector<ModelTriangle> &triangles, glm::vec3 &camera, glm::mat3 &cameraOrientation) {
 	float focalLength = 2.0;
+	float scale = 200.0;
 
 	float depth[WIDTH + 1][HEIGHT + 1];
+	for (int i = 0; i < WIDTH; i++) {
+		for (int j = 0; j < HEIGHT; j++) {
+			depth[i][j] = 0.0;
+		}
+	}
 
 	for (int i = 0; i < triangles.size(); i++) {
 		vector<CanvasPoint> points;
 
 		for (int j = 0; j < 3; j ++) {
 			glm::vec3 vertex = triangles[i].vertices[j];
-			float x = (vertex[0] * -150) + camera[0];
-			float y = (vertex[1] * 150) + camera[1];
-			float z = (vertex[2] - (camera[2] / 2));
 
-			float u = (focalLength * (x / z)) + (WIDTH / 2);
-			float v = (focalLength * (y / z)) + (HEIGHT / 2);
+			glm::vec3 camToVertex(vertex[0] - camera[0], vertex[1] - camera[1], vertex[2] - camera[2]);
+			glm::vec3 adjustedVector = camToVertex * cameraOrientation;
 
-			points.push_back(CanvasPoint(u, v, z));
+			float x = (-adjustedVector[0] * scale);
+			float y = (adjustedVector[1] * scale);
+			float z = (adjustedVector[2]);
+
+			float ua = (focalLength * (x / z)) + (WIDTH / 2.0);
+			float va = (focalLength * (y / z)) + (HEIGHT / 2.0);
+			CanvasPoint point = CanvasPoint(ua, va, z);
+
+			points.push_back(point);
 		}
 
 		CanvasTriangle triangle = CanvasTriangle(points[0], points[1], points[2]);
@@ -342,7 +354,7 @@ void pan(glm::mat3 &cameraOrientation) {
 float proximityLighting(glm::vec3 &point, glm::vec3 &light) {
 	float distanceFromLight = glm::length(light - point);
 
-	float brightness = 1.0 / (4 * M_PI * (distanceFromLight * distanceFromLight));
+	float brightness = 1000.0 / (4 * M_PI * (distanceFromLight * distanceFromLight));
 
 	if (brightness > 1.0) brightness = 1.0;
 
@@ -407,7 +419,7 @@ bool inShadow(glm::vec3 &point, glm::vec3 &light, vector<ModelTriangle> &triangl
 }
 
 float ambientLighting(float brightness) {
-	float ambientLight = 0.2;
+	float ambientLight = 0.1;
 
 	if (brightness < ambientLight) {
 		return ambientLight;
@@ -465,7 +477,6 @@ void drawRayTrace(DrawingWindow &window, vector<ModelTriangle> &triangles, glm::
 
 	for (float v = 0; v < HEIGHT; v++) {
 		for (float u = 0; u < WIDTH; u++) {
-			std::cout << "X: " << u << ", Y: " << v << "/" << HEIGHT << std::endl;
 			glm::vec3 direction = calculateDirection(u, v, camera, cameraOrientation);
 
 			RayTriangleIntersection inter = getClosestIntersection(camera, direction, triangles, -1);
@@ -475,8 +486,12 @@ void drawRayTrace(DrawingWindow &window, vector<ModelTriangle> &triangles, glm::
 				float brightness = getBrightness(inter.intersectionPoint, light, triangles, camera, inter.triangleIndex);
 				uint32_t colourInt;
 
-				if (inter.intersectedTriangle.texturePoints.size() != 0) {
+				if (inter.intersectedTriangle.hasTexture) {
 					colourInt = getTexturePixelColour(inter.intersectedTriangle, inter.solution);
+					float r = colourInt >> 16 & 255;
+					float g = colourInt >> 8 & 255;
+					float b = colourInt & 255;
+					colourInt = (255 << 24) + (int(r * brightness) << 16) + (int(g * brightness) << 8) + int(b * brightness);
 				} else {
 					Colour colour = inter.intersectedTriangle.colour;
 					colourInt = (255 << 24) + (int(colour.red * brightness) << 16) + (int(colour.green * brightness) << 8) + int(colour.blue * brightness);
@@ -494,17 +509,17 @@ void draw(DrawingWindow &window, vector<ModelTriangle> &triangles, glm::vec3 &ca
 	if (renderMode == 0) { // Raytrace
 		drawRayTrace(window, triangles, camera, cameraOrientation, light);
 		std::cout << "Rendered Ray" << std::endl;
-	} else if (renderMode == 1) { // Raster
-		renderTexturedTriangles(window, triangles, camera, cameraOrientation);
+	} else if (renderMode == 2) { // Raster
+		renderFilledTriangles(window, triangles, camera, cameraOrientation);
 		std::cout << "Rendered Rast" << std::endl;
-	} else if (renderMode == 2) { // Wireframe
+	} else if (renderMode == 1) { // Wireframe
 		renderWireframes(window, triangles, camera, cameraOrientation);
 		std::cout << "Rendered Wire" << std::endl;
 	}
 
 }
 
-void update(DrawingWindow &window, glm::vec3 &camera, glm::mat3 &cameraOrientation) {
+void update(DrawingWindow &window, glm::vec3 &camera, glm::mat3 &cameraOrientation, glm::vec3 &light) {
 	rotateY(camera);
 	glm::vec3 centre(50.0, 45.0, 0.0);
 	lookAt(centre, camera, cameraOrientation);
@@ -513,12 +528,12 @@ void update(DrawingWindow &window, glm::vec3 &camera, glm::mat3 &cameraOrientati
 void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camera, glm::mat3 &cameraOrientation, int &renderMode, glm::vec3 &light) {
 	glm::vec3 centre(50.0, 45.0, 0.0);
 	if (event.type == SDL_KEYDOWN) {
-		if (event.key.keysym.sym == SDLK_LEFT) camera[0] += 0.3;
-		else if (event.key.keysym.sym == SDLK_RIGHT) camera[0] -= 0.3;
-	 	else if (event.key.keysym.sym == SDLK_UP) camera[1] -= 0.3;
-	 	else if (event.key.keysym.sym == SDLK_DOWN) camera[1] += 0.3;
-	 	else if (event.key.keysym.sym == SDLK_RCTRL) camera[2] += 0.3;
-		else if (event.key.keysym.sym == SDLK_RSHIFT) camera[2] -= 0.3;
+		if (event.key.keysym.sym == SDLK_LEFT) camera[0] += 1;
+		else if (event.key.keysym.sym == SDLK_RIGHT) camera[0] -= 1;
+	 	else if (event.key.keysym.sym == SDLK_UP) camera[1] -= 1;
+	 	else if (event.key.keysym.sym == SDLK_DOWN) camera[1] += 1;
+	 	else if (event.key.keysym.sym == SDLK_RCTRL) camera[2] += 1;
+		else if (event.key.keysym.sym == SDLK_RSHIFT) camera[2] -= 1;
 		else if (event.key.keysym.sym == SDLK_p) rotateX(camera);
 		else if (event.key.keysym.sym == SDLK_o) rotateY(camera);
 		else if (event.key.keysym.sym == SDLK_l) tilt(cameraOrientation);
@@ -533,14 +548,18 @@ void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camera, glm:
 		else if (event.key.keysym.sym == SDLK_s) light[1] -= 1;
 		else if (event.key.keysym.sym == SDLK_q) light[2] -= 1;
 		else if (event.key.keysym.sym == SDLK_e) light[2] += 1;
-		std::cout << renderMode << std::endl;
+		std::cout << "KEY" << std::endl;
 	}
 	else if (event.type == SDL_MOUSEBUTTONDOWN) window.savePPM("output.ppm");
 
 }
 
 void outputFrame(int frame, DrawingWindow window) {
-	string filename = "./output/frame" + to_string(frame) + ".ppm";
+	string frameNumber = to_string(frame);
+	if (frameNumber.length() == 1) frameNumber = "00" + frameNumber;
+	if (frameNumber.length() == 2) frameNumber = "0" + frameNumber;
+
+	string filename = "./output/frame" + frameNumber + ".ppm";
 	window.savePPM(filename);
 }
 
@@ -556,7 +575,7 @@ int main(int argc, char *argv[]) {
 	vector<ModelTriangle> triangles;
 	readOBJ(triangles, foldername + "logo.obj", 0.17, materials);
 
-	glm::vec3 light(400.0, 400.0, 40.0);
+	glm::vec3 light(70.0, 75.0, 5.0);
 	glm::vec3 camera(50.0, 45.0, 150.0);
 	glm::mat3 cameraOrientation(
 		1.0, 0.0, 0.0,
@@ -567,18 +586,24 @@ int main(int argc, char *argv[]) {
 	int renderMode = 0;
 
 	int frame = 0;
+	int maxFrames = 180;
 
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window, camera, cameraOrientation, renderMode, light);
-		update(window, camera, cameraOrientation);
+		update(window, camera, cameraOrientation, light);
 		draw(window, triangles, camera, cameraOrientation, light, renderMode);
 		// Need to render the frame at the end, or nothing actually gets shown on the screen !
 		window.renderFrame();
 		outputFrame(frame, window);
-		//if (frame == 180) {
-			//break;
-		//}
+		if (frame == maxFrames) {
+			if (renderMode == 2) {
+				break;
+			} else {
+				renderMode++;
+				maxFrames += 180;
+			}
+		}
 		frame++;
 	}
 }

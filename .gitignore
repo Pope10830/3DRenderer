@@ -1,7 +1,7 @@
 /build
 /cornell-box
 /logo
-/output
+/output/
 /RenderedFrames
 CMakeLists.txt
 Makefile
